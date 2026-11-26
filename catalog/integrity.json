@@ -289,8 +289,8 @@
     },
     {
       "path": "src/recovery.js",
-      "size": 6438,
-      "sha256": "8284e09f3bd75ade5f3ca62166d6710aaf2e069a879feccdc480568c6e363a50"
+      "size": 6774,
+      "sha256": "c8092220593d3ee4de43756c3665c2d7c158bb6db42b08b7fbfb59843a49d866"
     },
     {
       "path": "src/reload.js",
@@ -314,8 +314,8 @@
     },
     {
       "path": "src/stream.js",
-      "size": 30673,
-      "sha256": "e87268186540dd714c2976481092a5c8f2795e8c721999bae6630b9ce88d03d9"
+      "size": 31476,
+      "sha256": "604b259e3a3df9a3685ec5ea5c586e9feb49dbcf011cc7405664e32249a33717"
     },
     {
       "path": "src/subscription-adapter.js",
