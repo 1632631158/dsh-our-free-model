@@ -133,6 +133,7 @@ const suites = [
   ['sniff', 'sniff-test.mjs', []],
   ['stream-failure', 'stream-failure-test.mjs', []],
   ['truncation', 'truncation-test.mjs', []],
+  ['recovery-estimate', 'recovery-estimate-test.mjs', []],
   ['recovery', 'recovery-test.mjs', []],
   ['retry-safety', 'retry-safety-test.mjs', []],
   ['usage-sanitize', 'usage-sanitize-test.mjs', []],
