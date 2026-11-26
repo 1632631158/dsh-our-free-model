@@ -65,6 +65,7 @@ const suites = [
   ['private-file', 'private-file-permissions-test.mjs', []],
   ['subscriptions', 'subscriptions-test.mjs', []],
   ['subscription-completion', 'subscription-completion-test.mjs', []],
+  ['responses-refusal', 'responses-refusal-test.mjs', []],
   ['subscription-wiring', 'subscription-wiring-test.mjs', []],
   ['magpie-engine', 'magpie-engine-test.mjs', []],
   ['engine-transport', 'engine-transport-test.mjs', []],
