@@ -1,7 +1,7 @@
 {
   "version": "2.9.1",
   "base": "../",
-  "publishedAt": "2026-11-26T07:29:52.276Z",
+  "publishedAt": "2026-11-27T06:58:34.290Z",
   "notes": "",
   "files": [
     {
@@ -61,8 +61,8 @@
     },
     {
       "path": "src/aggregate.js",
-      "size": 35282,
-      "sha256": "d256979f3ff191236609e18d49a21b42888f0357cc33e12f18dcd4af8e6dcd03"
+      "size": 36281,
+      "sha256": "01d46fe5907eb21407fc3bf71386f3ba1547d3a485f2bd81c661821ab48025d1"
     },
     {
       "path": "src/anthropic.js",
@@ -301,8 +301,8 @@
     },
     {
       "path": "src/route/classify.js",
-      "size": 11743,
-      "sha256": "7f66461dc87f8ba4636749ad33fed2ac9de68736318f6d1f29b760a916286230"
+      "size": 11809,
+      "sha256": "adcbf91f642055304c432ed690c9c6d2233a4fe656a08a4d4a5225de5f422ab4"
     },
     {
       "path": "src/semver.js",
@@ -316,8 +316,8 @@
     },
     {
       "path": "src/stream.js",
-      "size": 31476,
-      "sha256": "604b259e3a3df9a3685ec5ea5c586e9feb49dbcf011cc7405664e32249a33717"
+      "size": 31656,
+      "sha256": "aeb746c874ed27a89077d5ff64dfbf71f208f6bf72c629ab4be3cb01a0c7a2ef"
     },
     {
       "path": "src/subscription-adapter.js",
@@ -405,5 +405,5 @@
       "sha256": "975b70c8d2fc53ed5928446f4b98a81cb369203894017201975b06ed554b0eca"
     }
   ],
-  "signature": "b3wEzEVDN+C7mTeBYBOydeRp6PkXAEHxqAJw1tvr0e7W7awDISKXOj14PvC9T6DhiwqSNMNyXNawmQvsZeatBQ=="
+  "signature": "xDgQwQ4yWHAlb7ZpNcJdV5xsr47BuzV00jzvwlP1nyW5kZ5AdS4JiRQs/FvYCJI5HSlc5U0aZaye0ZTjr16JDA=="
 }
