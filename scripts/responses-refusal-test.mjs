@@ -8,11 +8,44 @@
  * one real answer was billed up to three times and never shown. These cases pin
  * the refusal text onto the same text-block path the visible answer uses.
  *
- * Pure memory: no server, no port, no stub upstream.
+ * The decoder cases are pure memory. The terminal/error regression cases use a
+ * real FreeModelAdapter against a loopback HTTP fixture bound to 127.0.0.1:0.
  *
  * Run: node scripts/responses-refusal-test.mjs
  */
-import { readStream } from '../src/stream.js'
+import http from 'node:http'
+import process from 'node:process'
+
+const sse = payload => `data: ${JSON.stringify(payload)}\n\n`
+const outputDelta = text => sse({ type: 'response.output_text.delta', output_index: 0, delta: text })
+const incomplete = reason => sse({ type: 'response.incomplete', response: { status: 'incomplete', incomplete_details: { reason } } })
+const complete = text => outputDelta(text) + sse({ type: 'response.completed', response: { status: 'completed' } })
+
+let activeScenario
+const fixtureServer = http.createServer((req, res) => {
+  const pieces = []
+  req.on('data', piece => pieces.push(piece))
+  req.on('end', () => {
+    if (!activeScenario) {
+      res.writeHead(500, { 'content-type': 'text/plain' })
+      res.end('no active content-filter fixture')
+      return
+    }
+    let body = {}
+    try { body = JSON.parse(Buffer.concat(pieces).toString('utf8') || '{}') } catch { /* keep the captured malformed body */ }
+    const ordinal = activeScenario.requests.length
+    activeScenario.requests.push({ path: req.url, body })
+    const answer = activeScenario.responses[ordinal] ?? complete('UNEXPECTED_EXTRA_REQUEST')
+    res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' })
+    res.end(answer)
+  })
+})
+await new Promise(resolve => fixtureServer.listen(0, '127.0.0.1', resolve))
+fixtureServer.unref()
+process.env.OUR_FREE_MODEL_BASE = `http://127.0.0.1:${fixtureServer.address().port}`
+
+// Import only after pinning the base URL: upstream.js reads it at module load.
+const { readStream } = await import('../src/stream.js')
 
 let failures = 0
 const check = (name, actual, expected) => {
@@ -170,7 +203,99 @@ const chatRefusal = () => [
   check('REF-7 and does not claim text arrived', state.sawText, false)
 }
 
+// Content filtering is a terminal request failure. These cases intentionally
+// cross the real adapter boundary: a parser-only assertion cannot prove that a
+// partial block closes, recovery stays off, or a combo does not rotate.
+const { FreeModelAdapter, ROUTE_MAIN } = await import('../src/adapter.js')
+const { buildCatalog } = await import('../src/catalog.js')
+const { buildComboCatalog, normalizeCombos } = await import('../src/combos.js')
+const MODEL_IDS = ['muse-spark-1.3-contributor-free', 'muse-spark-1.2-contributor-free']
+const MODEL_CATALOG = buildCatalog(MODEL_IDS)
+const COMBO_ID = 'combo:responses-content-filter'
+const COMBO_CATALOG = buildComboCatalog(normalizeCombos([
+  { id: COMBO_ID, name: 'Responses content filter', models: MODEL_IDS, strategy: 'fallback' },
+]), MODEL_CATALOG)
+const CATALOG = [...MODEL_CATALOG, ...COMBO_CATALOG]
+
+async function adapterTurn(model, responses) {
+  const scenario = { responses, requests: [] }
+  activeScenario = scenario
+  const records = []
+  const controller = new AbortController()
+  const adapter = new FreeModelAdapter({
+    state: () => ({
+      catalog: CATALOG,
+      membership: { [ROUTE_MAIN]: MODEL_IDS },
+      settings: { enabled: true, defaultMaxTokens: 32768, streamRecovery: true },
+      attributionUserAgent: 'offline-responses-content-filter-test',
+    }),
+    recordUsage: row => records.push(row),
+    recordTurn: () => {},
+    warn: () => {},
+  })
+  const chunks = []
+  try {
+    for await (const chunk of adapter.stream({
+      provider: ROUTE_MAIN,
+      model,
+      maxTokens: 4096,
+      sessionId: 'responses-content-filter-test',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'CONTENT_FILTER_FIXTURE_SENTINEL' }] }],
+      signal: controller.signal,
+    })) chunks.push(chunk)
+  } finally {
+    controller.abort()
+    activeScenario = undefined
+  }
+  return {
+    chunks,
+    records,
+    requests: scenario.requests,
+    finish: chunks.find(chunk => chunk.type === 'finish')?.reason,
+  }
+}
+
+const FILTERED_TEXT = 'PARTIAL_TEXT_BEFORE_CONTENT_FILTER'
+{
+  const run = await adapterTurn(MODEL_IDS[0], [
+    outputDelta(FILTERED_TEXT) + incomplete('content_filter'),
+    complete('MUST_NOT_BE_CONTINUED'),
+  ])
+  check('CF-1 partial content_filter sends exactly one request', run.requests.length, 1)
+  check('CF-1 partial answer remains visible once', textOf(run.chunks), FILTERED_TEXT)
+  check('CF-1 partial text block closes with the emitted text', closedText(run.chunks), [FILTERED_TEXT])
+  check('CF-1 filter is surfaced as an error finish', run.finish?.kind, 'error')
+  check('CF-1 filter exposes CONTENT_BLOCKED', run.finish?.failure?.code, 'CONTENT_BLOCKED')
+}
+
+{
+  const run = await adapterTurn(COMBO_ID, [
+    incomplete('content_filter'),
+    complete('MUST_NOT_FALL_BACK'),
+  ])
+  check('CF-2 zero-text content_filter sends exactly one combo request', run.requests.length, 1)
+  check('CF-2 the combo starts with the first Responses model', run.requests[0]?.body?.model, MODEL_IDS[0])
+  check('CF-2 zero-text filter is surfaced as an error finish', run.finish?.kind, 'error')
+  check('CF-2 zero-text filter exposes CONTENT_BLOCKED', run.finish?.failure?.code, 'CONTENT_BLOCKED')
+  check('CF-2 zero-text filter is not EMPTY_RESPONSE', run.finish?.failure?.code === 'EMPTY_RESPONSE', false)
+}
+
+{
+  const prefix = 'MAX_OUTPUT_TOKENS_PREFIX'
+  const suffix = 'MAX_OUTPUT_TOKENS_SUFFIX'
+  const run = await adapterTurn(MODEL_IDS[0], [
+    outputDelta(prefix) + incomplete('max_output_tokens'),
+    complete(suffix),
+  ])
+  check('CF-3 max_output_tokens still performs one continuation request', run.requests.length, 2)
+  check('CF-3 both answer parts survive the continuation', textOf(run.chunks), prefix + suffix)
+  check('CF-3 the continuation ends normally', run.finish?.kind, 'stop')
+  check('CF-3 the first attempt records continuation scheduling', run.records[0]?.recoveryScheduled, true)
+}
+
+await new Promise(resolve => fixtureServer.close(resolve))
+
 console.log(failures === 0
-  ? '\nresponses-refusal: a refusal is an answer'
+  ? '\nresponses-refusal: refusal decoding and content-filter adapter termination'
   : '\n' + failures + ' check(s) failed')
 process.exitCode = failures === 0 ? 0 : 1
